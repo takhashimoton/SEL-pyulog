@@ -20,8 +20,9 @@ from .core import ULog
 def main():
     """Command line interface"""
 
-    parser = argparse.ArgumentParser(description='Parse Ulog file')
+    parser = argparse.ArgumentParser(description='Analyze Ulog file')
     parser.add_argument('filename', metavar='file.ulg', help='ULog input file')
+    parser.add_argument('-c', '--consumption', action='store_true', help='Turn on consumption calculator')
 
     args = parser.parse_args()
 
@@ -49,6 +50,9 @@ def main():
 
     print(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a16, a12, a13, a14, a15)
 
+    if args.consumption == True:
+        consum(ulog)
+
 """
 
     print('Min airspped  (param)              :', '{:.1f}'.format(asp_set(ulog)[2]))
@@ -75,9 +79,6 @@ def main():
     print('Max yaw   angular rate integral    :', '{:.2f}'.format(yaw_integ(ulog)))
 
 """
-
-    #waypo(ulog)
-    #consum(ulog)
 
 
 def roll_integ(ulog):
