@@ -23,10 +23,36 @@ def main():
     parser = argparse.ArgumentParser(description='Analyze Ulog file')
     parser.add_argument('filename', metavar='file.ulg', help='ULog input file')
     parser.add_argument('-c', '--consumption', action='store_true', help='Turn on consumption calculator')
+    parser.add_argument('-w', '--waypoint', action='store_true', help='Waypoint reached time')
+    parser.add_argument('-d', '--directory', action='store_true', help='Analyze all files at once')
 
     args = parser.parse_args()
 
-    ulog = ULog(args.filename, disable_str_exceptions=False)
+    ff = bool(True)
+
+    if args.consumption == True:
+        ff = False
+        ulog = ULog(args.filename, disable_str_exceptions=False)
+        consum(ulog)
+
+    if args.waypoint == True:
+        ff = False
+        ulog = ULog(args.filename, disable_str_exceptions=False)
+        waypo(ulog)
+
+    if args.directory == True:
+        ff = False
+        for curDir, dirs, files in os.walk(args.filename):
+            for file in sorted(files):
+                ulog = ULog(os.path.join(curDir, file), disable_str_exceptions=False)
+                display(ulog)  
+
+    if ff == True:
+        ulog = ULog(args.filename, disable_str_exceptions=False)
+        display(ulog)
+
+
+def display(ulog):
 
     t = ft_analyzer(ulog)
     rwto_d = (t[1] - t[0])/1000000
@@ -47,11 +73,11 @@ def main():
     a13 = round(roll_integ(ulog), 2)
     a14 = round(pitch_integ(ulog), 2)
     a15 = round(yaw_integ(ulog), 2)
+    a16 = round(bat_analyzer(ulog)[0], 2)
+    a17 = round(bat_analyzer(ulog)[1], 2)
+    a18 = round(bat_analyzer(ulog)[2], 2)
 
-    print(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a16, a12, a13, a14, a15)
-
-    if args.consumption == True:
-        consum(ulog)
+    print(a1, a2, a3, a16, a17, a4, a5, a6, a7, a8, a18, a9, a10, a11, a16, a12, a13, a14, a15)
 
 """
 
@@ -244,12 +270,12 @@ def co_max_roll(ulog):
     t = ft_analyzer(ulog)
     pos_time = t[2]
     fwp_time = t[3]
-    max_r = 0
+    max_r = 0.0
 
     for i in range(len(d.data['timestamp'])):
         if d.data['timestamp'][i] > pos_time and d.data['timestamp'][i] < fwp_time:
-            tmp_r = abs(tl.degRoll(d.data['q[0]'][i], d.data['q[1]'][i], d.data['q[2]'][i], d.data['q[3]'][i]))
-            if tmp_r > max_r:
+            tmp_r = tl.degRoll(d.data['q[0]'][i], d.data['q[1]'][i], d.data['q[2]'][i], d.data['q[3]'][i])
+            if abs(tmp_r) > abs(max_r):
                 max_r = tmp_r
     
     return max_r
@@ -301,6 +327,13 @@ def ft_analyzer(ulog):
     abr_pt_ang = int(0)
     abr_pt_rate = int(0)
 
+    rwto_time = 0.0
+    vr_time = 0.0
+    pos_time = 0.0
+    fwp_time = 0.0
+    slp_time = 0.0
+    lnd_time = 0.0
+
     for m in ulog.logged_messages:
         mt = m.timestamp
         mmsg = m.message
@@ -320,15 +353,17 @@ def ft_analyzer(ulog):
             pos_time = mt
         if 'on slope' in mmsg:
             slp_time = mt
+        if 'landed.' in mmsg:
+            lnd_time = mt
 
     d = ulog.get_dataset('mission_result')
 
     for i in range(len(d.data['timestamp'])):
             if d.data['timestamp'][i] > vr_time:
-                fwp_time = d.data['timestamp'][i]
+                fwp_time = d.data['timestamp'][i] # first way point time
                 break
 
-    return rwto_time, vr_time, pos_time, fwp_time, slp_time, abr_off, abr_roll, abr_pt_ang, abr_pt_rate
+    return rwto_time, vr_time, pos_time, fwp_time, slp_time, abr_off, abr_roll, abr_pt_ang, abr_pt_rate, lnd_time
 
 
 def asp_set(ulog):
@@ -339,6 +374,61 @@ def asp_set(ulog):
     asp_min = d['FW_AIRSPD_MIN']
 
     return asp_max, asp_trm, asp_min
+
+
+def bat_analyzer(ulog):
+
+    d1 = ulog.get_dataset('battery_status')
+    d2 = ulog.get_dataset('vehicle_rates_setpoint')
+    t = ft_analyzer(ulog)
+    rwto_time = t[0]
+    fwp_time = t[3]
+    lnd_time = t[9]    
+    v_init = 0.0
+    v_fin = 0.0
+    v_drop = 100.0
+
+    for i in range(len(d1.data['timestamp'])):
+        if d1.data['timestamp'][i] > rwto_time:
+            for j in range(len(d2.data['timestamp'])):
+                if d2.data['timestamp'][j] > rwto_time:
+                    if d2.data['thrust_body[0]'][j-1] < 0.01:
+                        v_init = d1.data['voltage_filtered_v'][i-1]
+                        break
+                    else:
+                        v_init = 999.9
+                        break
+            else:
+                continue
+            break
+
+    for i in range(len(d1.data['timestamp'])):
+        if d1.data['timestamp'][i] > lnd_time:
+            for j in range(len(d2.data['timestamp'])):
+                if d2.data['timestamp'][j] > lnd_time:
+                    if d2.data['thrust_body[0]'][j] < 0.01:
+                        v_fin = d1.data['voltage_filtered_v'][i]
+                        break
+                    else:
+                        v_fin = 999.9
+                        break
+            else:
+                continue
+            break
+
+    for i in range(len(d1.data['timestamp'])):
+        if d1.data['timestamp'][i] > rwto_time and d1.data['timestamp'][i] < fwp_time:
+            if v_drop > d1.data['voltage_filtered_v'][i]:
+                v_drop = d1.data['voltage_filtered_v'][i]
+        elif d1.data['timestamp'][i] > fwp_time:
+            break
+    
+    v_drop = v_init - v_drop
+    
+    return v_init, v_fin, v_drop
+
+
+
 
 
 #if __name__ == "__main__":
