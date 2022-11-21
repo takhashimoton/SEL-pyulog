@@ -90,7 +90,7 @@ def q2euler(ulog):
     vehicle attitude quaternion to euler(degree)
     """
 
-    d = ulog.get_dataset('vehicle_attitude') # The 34th dataset is 'vehicle_attitude_0'
+    d = ulog.get_dataset('vehicle_attitude')
 
     degRoll1 = [0] * len(d.data['timestamp'])
     degPitch1 = [0] * len(d.data['timestamp'])

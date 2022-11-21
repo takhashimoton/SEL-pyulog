@@ -7,13 +7,14 @@ Evaluate a ULog file
 from __future__ import print_function
 
 import argparse
+from cmath import sqrt
 import os
 from matplotlib.cbook import maxdict
 import numpy as np
 import datetime
 import tools as tl
 
-from .core import ULog
+from core import ULog
 
 #pylint: disable=too-many-locals, invalid-name, consider-using-enumerate
 
@@ -23,8 +24,10 @@ def main():
     parser = argparse.ArgumentParser(description='Analyze Ulog file')
     parser.add_argument('filename', metavar='file.ulg', help='ULog input file')
     parser.add_argument('-c', '--consumption', action='store_true', help='Turn on consumption calculator')
-    parser.add_argument('-w', '--waypoint', action='store_true', help='Waypoint reached time')
-    parser.add_argument('-d', '--directory', action='store_true', help='Analyze all files at once')
+    parser.add_argument('-w', '--waypoint', action='store_true', help='Display waypoint reached time')
+    parser.add_argument('-d', '--directory', action='store_true', help='Analyze all files in a directory at once')
+    parser.add_argument('-p', '--pitch', action='store_true', help='Average pitch angle')
+
 
     args = parser.parse_args()
 
@@ -44,8 +47,14 @@ def main():
         ff = False
         for curDir, dirs, files in os.walk(args.filename):
             for file in sorted(files):
-                ulog = ULog(os.path.join(curDir, file), disable_str_exceptions=False)
-                display(ulog)  
+                if file.endswith(".ulg"):
+                    ulog = ULog(os.path.join(curDir, file), disable_str_exceptions=False)
+                    display(ulog)
+
+    if args.pitch == True:
+        ff = False
+        ulog = ULog(args.filename, disable_str_exceptions=False)
+        avg_pitch(ulog)
 
     if ff == True:
         ulog = ULog(args.filename, disable_str_exceptions=False)
@@ -57,27 +66,30 @@ def display(ulog):
     t = ft_analyzer(ulog)
     rwto_d = (t[1] - t[0])/1000000
 
-    a1 = round(asp_set(ulog)[2], 1)
-    a2 = round(asp_set(ulog)[1], 1)
-    a3 = round(asp_set(ulog)[0], 1)
-    a4 = t[5]
-    a5 = t[6]
-    a6 = t[7]
-    a7 = t[8]
-    a8 = round(rwto_d, 2)
-    a9 = round(rwto_max(ulog)[0], 2)
-    a10 = round(rwto_max(ulog)[1], 2)
-    a11 = round(rwto_max(ulog)[2], 2)
-    a16 = round(rwto_max(ulog)[3], 2)
-    a12 = round(co_max_roll(ulog), 2)
-    a13 = round(roll_integ(ulog), 2)
-    a14 = round(pitch_integ(ulog), 2)
-    a15 = round(yaw_integ(ulog), 2)
-    a16 = round(bat_analyzer(ulog)[0], 2)
-    a17 = round(bat_analyzer(ulog)[1], 2)
-    a18 = round(bat_analyzer(ulog)[2], 2)
+    a1 = round(asp_set(ulog)[2], 1) # Minimum airspeed
+    a2 = round(asp_set(ulog)[1], 1) # Airspeed trim
+    a3 = round(asp_set(ulog)[0], 1) # Maximum airspeed
+    a4 = t[5] # Went off take off path
+    a5 = t[6] # Aborted by roll angle
+    a6 = t[7] # Aborted by pitch angle
+    a7 = t[8] # Aborted by pitch angular rate
+    a8 = round(rwto_d, 2) # Taking off duration
+    a9 = round(rwto_max(ulog)[0], 2) # Max roll angle
+    a10 = round(rwto_max(ulog)[1], 2) # Min pitch angle
+    a11 = round(rwto_max(ulog)[2], 2) # Max pitch angulat rate
+    a22 = round(rwto_max(ulog)[3], 2) # Min pitch angular rate
+    a12 = round(co_max_roll(ulog), 2) # Max roll angle during climbing out
+    a13 = round(roll_integ(ulog), 2) # Roll integral
+    a14 = round(pitch_integ(ulog), 2) # Pitch integral
+    a15 = round(yaw_integ(ulog), 2) # Yaw integral
+    a16 = round(bat_analyzer(ulog)[0], 2) # Voltage before taking off
+    a17 = round(bat_analyzer(ulog)[1], 2) # Voltage after landing
+    a18 = round(bat_analyzer(ulog)[2], 2) # Voltage drop during taking off
+    a19 = round(vib_analyzer(ulog)[0], 2) # Vibration average (*10^2)
+    a20 = round(vib_analyzer(ulog)[1], 2) # Vibration RMS (*10^2)
+    a21 = round(vib_analyzer(ulog)[2], 2) # Vibration Max (*10^2)
 
-    print(a1, a2, a3, a16, a17, a4, a5, a6, a7, a8, a18, a9, a10, a11, a16, a12, a13, a14, a15)
+    print(a1, a2, a3, a16, a17, a4, a5, a6, a7, a8, a18, a9, a10, a11, a22, a12, a19, a20, a21, a13, a14, a15)
 
 """
 
@@ -259,6 +271,41 @@ def consum(ulog):
 
     print('Average consumption = ', '{:.2f}'.format(watt), ' W')
 
+def avg_pitch(ulog):
+
+    """
+    Average pitch angle
+    """
+
+    d = ulog.get_dataset('vehicle_attitude')
+
+    sm, ss = input('Start time? (format = xx:yy) : ').split(':')
+    em, es = input('End time? (format = xx:yy) : ').split(':')
+
+    td = datetime.timedelta(minutes=int(sm), seconds=int(ss))
+    st = int(td.total_seconds()*1000000)
+    td = datetime.timedelta(minutes=int(em), seconds=int(es))
+    et = int(td.total_seconds()*1000000)
+
+    for i in range(len(d.data['timestamp'])):
+        if d.data['timestamp'][i] > st:
+            si = i
+            break
+    
+    for i in range(len(d.data['timestamp'])):
+        if d.data['timestamp'][i] > et:
+            ei = i - 1
+            break
+    
+    pitch_angle = 0
+
+    for i in range(si, ei):
+        pitch_angle = pitch_angle + tl.degPitch(d.data['q[0]'][i], d.data['q[1]'][i], d.data['q[2]'][i], d.data['q[3]'][i])
+    
+    pitch_angle = pitch_angle / (ei - si)
+
+    print('Average pitch angle = ', '{:.2f}'.format(pitch_angle), ' deg')
+
 
 def co_max_roll(ulog):
 
@@ -376,6 +423,33 @@ def asp_set(ulog):
     return asp_max, asp_trm, asp_min
 
 
+def vib_analyzer(ulog):
+
+    d = ulog.get_dataset('estimator_status')
+    pos_time = ft_analyzer(ulog)[2]
+    slp_time = ft_analyzer(ulog)[4]
+    max_vibe = d.data['vibe[2]'][0]
+    avg_vibe = 0.0
+    rms_vibe = 0.0
+    j = 0
+
+    for i in range(len(d.data['timestamp'])):
+        if d.data['timestamp'][i] > pos_time and d.data['timestamp'][i] < slp_time:
+            avg_vibe = avg_vibe + d.data['vibe[2]'][i]
+            rms_vibe = rms_vibe + d.data['vibe[2]'][i] ** 2
+            j = j + 1
+            if d.data['vibe[2]'][i] > max_vibe:
+                max_vibe = d.data['vibe[2]'][i]
+    
+    if j > 0:
+        avg_vibe = avg_vibe / j * 100
+        rms_vibe = ((rms_vibe / j) ** 0.5) * 100
+
+    max_vibe = max_vibe * 100
+
+    return avg_vibe, rms_vibe, max_vibe
+
+
 def bat_analyzer(ulog):
 
     d1 = ulog.get_dataset('battery_status')
@@ -431,5 +505,5 @@ def bat_analyzer(ulog):
 
 
 
-#if __name__ == "__main__":
-#    main()
+if __name__ == "__main__":
+    main()
