@@ -96,7 +96,7 @@ def display(ulog):
     print('Min airspped  (param)              :', '{:.1f}'.format(asp_set(ulog)[2]))
     print('Airspeed trim (param)              :', '{:.1f}'.format(asp_set(ulog)[1]))
     print('Max airspped  (param)              :', '{:.1f}'.format(asp_set(ulog)[0]))
-    
+
     print('Went off path abort                :', t[5])
     print('Roll angle abort                   :', t[6])
     print('Pitch angle abort                  :', t[7])
@@ -226,7 +226,7 @@ def waypo(ulog):
         m, s = divmod(td.seconds, 60)
         ctime = format(m, '02') + ':' + format(s, '02')
         minsec.append(ctime)
-    
+
     print('time  -  No.')
 
     for i in range(len(d.data['timestamp'])):
@@ -254,12 +254,12 @@ def consum(ulog):
         if d.data['timestamp'][i] > st:
             si = i
             break
-    
+
     for i in range(len(d.data['timestamp'])):
         if d.data['timestamp'][i] > et:
             ei = i - 1
             break
-    
+
     watt = 0
     x = d.data['timestamp']
     y = d.data['current_a'] * d.data['voltage_filtered_v']
@@ -324,7 +324,7 @@ def co_max_roll(ulog):
             tmp_r = tl.degRoll(d.data['q[0]'][i], d.data['q[1]'][i], d.data['q[2]'][i], d.data['q[3]'][i])
             if abs(tmp_r) > abs(max_r):
                 max_r = tmp_r
-    
+
     return max_r
 
 
@@ -368,7 +368,7 @@ def rwto_max(ulog):
 
 
 def ft_analyzer(ulog):
-    
+
     abr_off = int(0)
     abr_roll = int(0)
     abr_pt_ang = int(0)
@@ -457,7 +457,7 @@ def bat_analyzer(ulog):
     t = ft_analyzer(ulog)
     rwto_time = t[0]
     fwp_time = t[3]
-    lnd_time = t[9]    
+    lnd_time = t[9]
     v_init = 0.0
     v_fin = 0.0
     v_drop = 100.0
@@ -496,14 +496,14 @@ def bat_analyzer(ulog):
                 v_drop = d1.data['voltage_filtered_v'][i]
         elif d1.data['timestamp'][i] > fwp_time:
             break
-    
+
     v_drop = v_init - v_drop
-    
+
     return v_init, v_fin, v_drop
 
 
 
 
 
-if __name__ == "__main__":
-    main()
+#if __name__ == "__main__":
+#    main()
