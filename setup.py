@@ -4,7 +4,7 @@
 This module allows you to parse ULog files, which are used within the PX4
 autopilot middleware.
 
-The file format is documented on https://dev.px4.io/advanced-ulog-file-format.html
+The file format is documented on https://docs.px4.io/master/en/dev_log/ulog_file_format.html
 
 """
 
@@ -51,8 +51,7 @@ setup(
     classifiers=[_f for _f in CLASSIFIERS.split('\n') if _f],
     platforms=["Windows", "Linux", "Solaris", "Mac OS-X", "Unix"],
     install_requires=['numpy'],
-    tests_require=['nose', 'ddt'],
-    test_suite='nose.collector',
+    tests_require=['pytest', 'ddt'],
     entry_points = {
         'console_scripts': [
             'ulog_extract_gps_dump=pyulog.extract_gps_dump:main',
@@ -61,9 +60,12 @@ setup(
             'upc=pyulog.params:main',
             'ulog2csv=pyulog.ulog2csv:main',
             'ulog2kml=pyulog.ulog2kml:main',
+            'ulog2rosbag=pyulog.ulog2rosbag:main',
+            'ulog_migratedb=pyulog.migrate_db:main',
         ],
     },
     packages=find_packages(),
     version='1.0.11',
     cmdclass=versioneer.get_cmdclass(),
+    include_package_data=True,
 )
